@@ -3,8 +3,7 @@ use strict;
 use warnings;
 use Test::More;
 
-use lib '../Config-Loader/lib';
-use Config::Loader;
+use Config::ZOMG::Source::Loader;
 
 sub file_extension ($) { Config::ZOMG::Source::Loader::file_extension shift }
 

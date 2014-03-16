@@ -3,13 +3,11 @@ use warnings;
 
 use Test::More;
 
-use lib '../Config-Loader/lib';
-use Config::Loader;
+use Config::ZOMG;
 
-ok( my $config = Config::Loader->new(qw{ name xyzzy path t/assets }) );
+my $config = Config::ZOMG->new(qw{ name xyzzy path t/assets });
 
 ok($config->load);
-
 is($config->load->{'Controller::Foo'}->{foo},         'bar');
 is($config->load->{'Controller::Foo'}->{new},         'key');
 is($config->load->{'Model::Baz'}->{qux},              'xyzzy');
