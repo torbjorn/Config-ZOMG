@@ -1,3 +1,3 @@
 #!/bin/sh
 
-prove -L../Config-Loader/lib $*
+prove -I../Config-Loader/lib $*
