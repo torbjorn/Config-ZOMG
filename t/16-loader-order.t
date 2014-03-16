@@ -5,9 +5,10 @@ use Test::More;
 
 plan skip_all => "Config::General is required for this test" unless eval "require Config::General;";
 
-use Config::ZOMG;
+use lib '../Config-Loader/lib';
+use Config::Loader;
 
-my $config = Config::ZOMG->new(qw{ name xyzzy path t/assets/order });
+my $config = Config::Loader->new(qw{ name xyzzy path t/assets/order });
 
 ok($config->load);
 is($config->load->{'last'}, 'local_pl');

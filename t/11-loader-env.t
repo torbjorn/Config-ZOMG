@@ -3,11 +3,12 @@ use warnings;
 
 use Test::More;
 
-use Config::ZOMG;
+use lib '../Config-Loader/lib';
+use Config::Loader;
 
 $ENV{XYZZY_CONFIG} = "t/assets/some_random_file.pl";
 
-my $config = Config::ZOMG->new(qw{ name xyzzy path t/assets });
+my $config = Config::Loader->new(qw{ name xyzzy path t/assets });
 
 ok($config->load);
 is($config->load->{'Controller::Foo'}->{foo},       'bar');
