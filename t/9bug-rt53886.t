@@ -4,9 +4,10 @@ use warnings;
 use Test::More;
 use Test::Warn;
 
-use Config::ZOMG;
+use lib '../Config-Loader/lib';
+use Config::Loader;
 
-warning_is { Config::ZOMG->new( local_suffix => 'local' ) } undef;
-warning_like { Config::ZOMG->new( file => 'xyzzy',local_suffix => 'local' ) } qr/will be ignored if 'file' is given, use 'path' instead/;
+warning_is { Config::Loader->new( local_suffix => 'local' ) } undef;
+warning_like { Config::Loader->new( file => 'xyzzy',local_suffix => 'local' ) } qr/will be ignored if 'file' is given, use 'path' instead/;
 
 done_testing;

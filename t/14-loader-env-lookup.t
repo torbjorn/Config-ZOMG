@@ -5,7 +5,6 @@ use Test::More;
 
 use lib '../Config-Loader/lib';
 use Config::Loader;
-use Config::ZOMG;
 
 eval {
     delete $ENV{$_} for qw/CATALYST_CONFIG_LOCAL_SUFFIX/;

@@ -4,10 +4,11 @@ use warnings;
 use Test::More;
 plan qw/no_plan/;
 
-use Config::ZOMG;
+use lib '../Config-Loader/lib';
+use Config::Loader;
 my $config;
 
-$config = Config::ZOMG->new(
+$config = Config::Loader->new(
     qw{ name default path t/assets },
     default => {
         home => 'a-galaxy-far-far-away',

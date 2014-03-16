@@ -4,9 +4,10 @@ use warnings;
 use Test::More;
 use Test::Warn;
 
-use Config::ZOMG;
+use lib '../Config-Loader/lib';
+use Config::Loader;
 
-my $config = Config::ZOMG->new( name => '' );
+my $config = Config::Loader->new( name => '' );
 warning_is { $config->_path_to } undef;
 
 done_testing;
