@@ -5,18 +5,14 @@ package Config::ZOMG;
 use Moo;
 use Sub::Quote 'quote_sub';
 
-use Config::ZOMG::Source::Loader;
+use lib '../Config-Loader/lib';
+use Config::Loader;
 
 use Config::Any;
-use Hash::Merge::Simple;
+use List::Util 'first';
 
 has package => (
    is => 'ro',
-);
-
-has source => (
-   is => 'rw',
-   handles => [qw/ driver local_suffix no_env env_lookup path found find /],
 );
 
 has load_once => (
@@ -41,10 +37,55 @@ has path_to => (
    lazy => 1,
 );
 
+## Loaders Moo
+
+has _found => (
+   is => 'rw',
+);
+
+has name => (
+   is => 'rw',
+);
+
+has path => (
+   is => 'ro',
+   default => quote_sub q{ '.' },
+);
+
+has driver => (
+   is => 'ro',
+   default => quote_sub q[ {} ],
+);
+
+has local_suffix => (
+   is => 'ro',
+   default => quote_sub q{ 'local' },
+);
+
+has no_env => (
+   is => 'ro',
+   default => quote_sub q{ 0 },
+);
+
+has no_local => (
+   is => 'ro',
+   default => quote_sub q{ 0 },
+);
+
+has env_lookup => (
+   is => 'ro',
+   default => quote_sub q{ [] },
+);
+
+has path_is_file => (
+   is => 'ro',
+   default => quote_sub q{ 0 },
+);
+
 sub _build_path_to {
     my $self = shift;
     return $self->load->{home} if $self->load->{home};
-    return $self->source->path unless $self->source->path_is_file;
+    return $self->path unless $self->path_is_file;
     return '.';
 }
 
@@ -56,36 +97,31 @@ sub BUILD {
     my $self = shift;
     my $given = shift;
 
-    my ($source, %source);
     if ($given->{file}) {
 
-        $given->{path} = $given->{file};
-        $source{path_is_file} = 1;
-    }
+        $self->{path_is_file} = 1;
+        $self->{path} = $given->{file};
 
-    {
-        for (qw/
-            name
-            path
-            driver
-
-            no_local
-            local_suffix
-
-            no_env
-            env_lookup
-
-        /) {
-            $source{$_} = $given->{$_} if exists $given->{$_};
+        if ( exists $given->{local_suffix} ) {
+            warn "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead"
         }
 
-        warn "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead" if
-            exists $source{local_suffix} && exists $given->{file};
-
-        $source = Config::ZOMG::Source::Loader->new( %source );
     }
 
-    $self->source($source);
+    $self->{env_lookup} = [ $self->env_lookup ]
+        if defined $self->env_lookup && ref $self->env_lookup ne 'ARRAY';
+
+}
+
+sub clone {
+    require Clone;
+    Clone::clone($_[0]->config)
+  }
+
+sub reload {
+    my $self = shift;
+    $self->loaded(0);
+    return $self->load;
 }
 
 sub open {
@@ -100,39 +136,157 @@ sub open {
     return wantarray ? ($config_hash, $self) : $config_hash;
 }
 
+## Files found
+sub found {
+    my $self = shift;
+    return ( $self->_found ? @{ $self->_found } : () );
+}
+
+## Any files that would be found
+sub find {
+    my $self = shift;
+    return grep { -f $_ } $self->loaders_find_files;
+}
+
 sub load {
     my $self = shift;
 
     return $self->_config if $self->loaded && $self->load_once;
 
-    $self->_config($self->default);
+    use Data::Dumper;
+    $Data::Dumper::Pad = "# ";
 
-    $self->_load($_) for $self->source->read;
+    my @files = $self->loaders_find_files;
+    $self->_found([ grep {-r} @files ]);
+    my (@cfg, @local_cfg);
 
+    my $local_suffix = $self->loaders_get_local_suffix;
+    for (sort @files) {
+
+        if (m{$local_suffix\.}ms) {
+            push @local_cfg, $_;
+        } else {
+            push @cfg, $_;
+        }
+
+    }
+
+    my @final_files = $self->no_local ?
+        @cfg : (@cfg, @local_cfg);
+
+    my @sources = map {
+        ['File', { file => $_ } ],
+    } @final_files;
+
+
+    my $cfg = get_config(
+        {
+            default => $self->default,
+            source  => "Merged",
+            sources => \@sources,
+        }
+    );
+
+    $self->_config($cfg);
     $self->loaded(1);
+
+
 
     return $self->_config;
 }
 
-sub clone {
-   require Clone;
-   Clone::clone($_[0]->config)
-}
+## From original ::Loader :
 
-sub reload {
+sub loaders_find_files { # Doesn't really find files...hurm...
     my $self = shift;
-    $self->loaded(0);
-    return $self->load;
+
+    if ( $self->path_is_file ) {
+        my $path = $self->loaders_env_lookup('CONFIG') unless $self->no_env;
+        $path ||= $self->path;
+        return ($path);
+    }
+    else {
+        my ($path, $extension) = $self->loaders_get_path;
+        my $local_suffix = $self->loaders_get_local_suffix;
+        my @extensions = @{ Config::Any->extensions };
+        my $no_local = $self->no_local;
+
+        my @files;
+        if ($extension) {
+            die "Can't handle file extension $extension" unless first { $_ eq $extension } @extensions;
+            push @files, $path;
+            unless ($no_local) {
+                (my $local_path = $path) =~ s{\.$extension$}{_$local_suffix.$extension};
+                push @files, $local_path;
+            }
+        }
+        else {
+            push @files, map { "$path.$_" } @extensions;
+            push @files, map { "${path}_${local_suffix}.$_" } @extensions unless $no_local;
+        }
+
+        return @files;
+    }
 }
 
-sub _load {
+sub loaders_get_local_suffix {
     my $self = shift;
-    my $cfg = shift;
 
-    my ($file, $hash) = %$cfg;
+    my $name = $self->name;
+    my $suffix;
+    $suffix = $self->loaders_env_lookup('CONFIG_LOCAL_SUFFIX') unless
+        $self->no_env;
+    $suffix ||= $self->local_suffix || "local";
 
-    $self->_config(Hash::Merge::Simple->merge($self->_config, $hash));
+    return $suffix;
 }
+sub loaders_env_lookup {
+    my $self = shift;
+    my @suffix = @_;
+
+    my $name = $self->name;
+    my $env_lookup = $self->env_lookup || [];
+    my @lookup;
+    push @lookup, $name if $name;
+    push @lookup, @$env_lookup;
+
+    for my $prefix (@lookup) {
+        my $value = loaders_env($prefix, @suffix);
+        return $value if defined $value;
+    }
+
+    return;
+}
+sub loaders_env (@) {
+    my $key = uc join "_", @_;
+    $key =~ s/::/_/g;
+    $key =~ s/\W/_/g;
+    return $ENV{$key};
+}
+sub loaders_get_path {
+    my $self = shift;
+
+    my $name = $self->name;
+    my $path;
+    $path = $self->loaders_env_lookup('CONFIG') unless $self->no_env;
+    $path ||= $self->path;
+
+    my $extension = file_extension( $path );
+
+    if (-d $path) {
+        $path =~ s{[\/\\]$}{}; # Remove any trailing slash, e.g. apple/ or apple\ => apple
+        $path .= "/$name"; # Look for a file in path with $self->name, e.g. apple => apple/name
+    }
+
+    return ($path, $extension);
+}
+sub file_extension ($) {
+    my $path = shift;
+    return if -d $path;
+    my ($extension) = $path =~ m{\.([^/\.]{1,4})$};
+    return $extension;
+}
+
 
 1;
 
@@ -321,4 +475,3 @@ L<Config::Merge>
 L<Config::General>
 
 =cut
-

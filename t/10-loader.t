@@ -3,6 +3,9 @@ use warnings;
 
 use Test::More;
 
+## (setenv "ZOMG_USE_CL" "0")
+## (setenv "ZOMG_USE_CL" "1")
+
 use Config::ZOMG;
 
 my $config = Config::ZOMG->new(qw{ name xyzzy path t/assets });

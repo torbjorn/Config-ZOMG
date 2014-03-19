@@ -75,15 +75,19 @@ sub BUILD {
       if defined $self->env_lookup && ref $self->env_lookup ne 'ARRAY';
 }
 
+## This method returns a list of each with a filename and a config
+## hash A ::Merged should be able to do this, returning only one hash
+## and a bogus filename
 sub read {
     my $self = shift;
 
     my @files = $self->_find_files;
+    my (@cfg, @local_cfg);
+
     my $cfg_files = $self->_load_files(\@files);
     my %cfg_files = map { (%$_)[0] => $_ } reverse @$cfg_files;
     $self->_found( [ map { (%$_)[0] } @$cfg_files ] );
 
-    my (@cfg, @local_cfg);
     {
         # Anything that is local takes precedence
         my $local_suffix = $self->_get_local_suffix;
@@ -93,8 +97,7 @@ sub read {
 
             if (m{$local_suffix\.}ms) {
                 push @local_cfg, $cfg;
-            }
-            else {
+            } else {
                 push @cfg, $cfg;
             }
         }
@@ -155,6 +158,7 @@ sub _find_files { # Doesn't really find files...hurm...
     }
 }
 
+## might need to shift this one up too
 sub _env_lookup {
     my $self = shift;
     my @suffix = @_;

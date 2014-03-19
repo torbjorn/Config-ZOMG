@@ -3,9 +3,9 @@ use strict;
 use warnings;
 use Test::More;
 
-use Config::ZOMG::Source::Loader;
+use Config::ZOMG;
 
-sub file_extension ($) { Config::ZOMG::Source::Loader::file_extension shift }
+sub file_extension ($) { Config::ZOMG::file_extension shift }
 
 is( file_extension 'test.conf', 'conf' );
 is( file_extension '...', undef );
