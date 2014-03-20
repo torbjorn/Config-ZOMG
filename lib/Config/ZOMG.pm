@@ -11,6 +11,8 @@ use Config::Loader;
 use Config::Any;
 use List::Util 'first';
 
+use MooX::HandlesVia;
+
 has package => (
    is => 'ro',
 );
@@ -37,11 +39,7 @@ has path_to => (
    lazy => 1,
 );
 
-## Loaders Moo
-
-has _found => (
-   is => 'rw',
-);
+## Loaders Moo attributes
 
 has name => (
    is => 'rw',
@@ -93,6 +91,26 @@ has _config => (
    is => 'rw',
 );
 
+## Put the ::Merged here?
+has source => (
+    is => 'lazy',
+    builder => sub {
+
+        my $self = shift;
+
+        my @sources = map {
+            [ File => { file => $_ } ],
+        } $self->loaders_find_files;
+
+        return Config::Loader->new_source
+            ( "Merged",
+              default => $self->default,
+              sources=>\@sources
+          );
+
+      },
+);
+
 sub BUILD {
     my $self = shift;
     my $given = shift;
@@ -121,6 +139,8 @@ sub clone {
 sub reload {
     my $self = shift;
     $self->loaded(0);
+    # $self->_build_source;
+    delete $self->{source};
     return $self->load;
 }
 
@@ -139,7 +159,8 @@ sub open {
 ## Files found
 sub found {
     my $self = shift;
-    return ( $self->_found ? @{ $self->_found } : () );
+    return unless $self->loaded;
+    return ( map { $_->[1]{file} } @{ $self->source->sources } );
 }
 
 ## Any files that would be found
@@ -153,44 +174,9 @@ sub load {
 
     return $self->_config if $self->loaded && $self->load_once;
 
-    use Data::Dumper;
-    $Data::Dumper::Pad = "# ";
+    $self->_config( $self->source->load_config );
 
-    my @files = $self->loaders_find_files;
-    $self->_found([ grep {-r} @files ]);
-    my (@cfg, @local_cfg);
-
-    my $local_suffix = $self->loaders_get_local_suffix;
-    for (sort @files) {
-
-        if (m{$local_suffix\.}ms) {
-            push @local_cfg, $_;
-        } else {
-            push @cfg, $_;
-        }
-
-    }
-
-    my @final_files = $self->no_local ?
-        @cfg : (@cfg, @local_cfg);
-
-    my @sources = map {
-        ['File', { file => $_ } ],
-    } @final_files;
-
-
-    my $cfg = get_config(
-        {
-            default => $self->default,
-            source  => "Merged",
-            sources => \@sources,
-        }
-    );
-
-    $self->_config($cfg);
     $self->loaded(1);
-
-
 
     return $self->_config;
 }
@@ -203,7 +189,7 @@ sub loaders_find_files { # Doesn't really find files...hurm...
     if ( $self->path_is_file ) {
         my $path = $self->loaders_env_lookup('CONFIG') unless $self->no_env;
         $path ||= $self->path;
-        return ($path);
+        return (grep -r, $path);
     }
     else {
         my ($path, $extension) = $self->loaders_get_path;
@@ -225,7 +211,23 @@ sub loaders_find_files { # Doesn't really find files...hurm...
             push @files, map { "${path}_${local_suffix}.$_" } @extensions unless $no_local;
         }
 
-        return @files;
+        my (@cfg, @local_cfg);
+        for (sort @files) {
+
+            if (m{$local_suffix\.}ms) {
+                push @local_cfg, $_;
+            } else {
+                push @cfg, $_;
+            }
+
+        }
+
+        my @final_files = $no_local ?
+            @cfg : (@cfg, @local_cfg);
+
+        @final_files = grep -r, @final_files;
+
+        return @final_files;
     }
 }
 
