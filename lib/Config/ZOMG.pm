@@ -10,7 +10,6 @@ use lib '../Config-Loader/lib';
 use Config::Loader;
 
 use Config::Any;
-use List::Util 'first';
 
 use MooX::HandlesVia;
 
@@ -187,7 +186,7 @@ sub _find_files { # Doesn't really find files...hurm...
 
         my @files;
         if ($extension) {
-            die "Can't handle file extension $extension" unless first { $_ eq $extension } @extensions;
+            die "Can't handle file extension $extension" unless grep { $_ eq $extension } @extensions;
             push @files, $path;
             unless ($no_local) {
                 (my $local_path = $path) =~ s{\.$extension$}{_$local_suffix.$extension};
