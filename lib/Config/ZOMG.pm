@@ -22,11 +22,6 @@ has load_once => (
    default => quote_sub q{ 1 },
 );
 
-has loaded => (
-   is => 'rw',
-   default => quote_sub q{ 0 },
-);
-
 has default => (
    is => 'ro',
    default => quote_sub q[ {} ],
@@ -35,11 +30,14 @@ has default => (
 has path_to => (
    is => 'ro',
    reader => '_path_to',
-   builder => '_build_path_to',
    lazy => 1,
+   builder => sub { $_[0]->load->{home} ||
+                   !$_[0]->path_is_file && $_[0]->path ||
+                    "."
+                },
 );
 
-## Loaders Moo attributes
+## Moo attributes from the original ::Loader
 
 has name => (
    is => 'rw',
@@ -72,6 +70,10 @@ has no_local => (
 
 has env_lookup => (
    is => 'ro',
+   ## puts it in an array ref if receives a scalar
+   coerce => sub { ref $_[0] eq "ARRAY" && $_[0] || [$_[0]] },
+   handles_via => "Array",
+   handles => { "env_lookups" => "elements" },
    default => quote_sub q{ [] },
 );
 
@@ -80,27 +82,21 @@ has path_is_file => (
    default => quote_sub q{ 0 },
 );
 
-sub _build_path_to {
-    my $self = shift;
-    return $self->load->{home} if $self->load->{home};
-    return $self->path unless $self->path_is_file;
-    return '.';
-}
-
 has _config => (
    is => 'rw',
 );
 
-## Put the ::Merged here?
 has source => (
     is => 'lazy',
+    clearer => 1,
+    predicate => 1,
     builder => sub {
 
         my $self = shift;
 
         my @sources = map {
             [ File => { file => $_ } ],
-        } $self->loaders_find_files;
+        } $self->_find_files;
 
         return Config::Loader->new_source
             ( "Merged",
@@ -126,21 +122,16 @@ sub BUILD {
 
     }
 
-    $self->{env_lookup} = [ $self->env_lookup ]
-        if defined $self->env_lookup && ref $self->env_lookup ne 'ARRAY';
-
 }
 
 sub clone {
     require Clone;
-    Clone::clone($_[0]->config)
-  }
+    Clone::clone($_[0]->config);
+}
 
 sub reload {
     my $self = shift;
-    $self->loaded(0);
-    # $self->_build_source;
-    delete $self->{source};
+    $self->clear_source;
     return $self->load;
 }
 
@@ -156,44 +147,37 @@ sub open {
     return wantarray ? ($config_hash, $self) : $config_hash;
 }
 
-## Files found
+## Files found after loading
 sub found {
     my $self = shift;
-    return unless $self->loaded;
+    return unless $self->has_source;
     return ( map { $_->[1]{file} } @{ $self->source->sources } );
 }
 
 ## Any files that would be found
 sub find {
     my $self = shift;
-    return grep { -f $_ } $self->loaders_find_files;
+    return grep { -f $_ } $self->_find_files;
 }
 
 sub load {
     my $self = shift;
-
-    return $self->_config if $self->loaded && $self->load_once;
-
+    return $self->_config if $self->has_source && $self->load_once;
     $self->_config( $self->source->load_config );
-
-    $self->loaded(1);
-
     return $self->_config;
 }
 
-## From original ::Loader :
-
-sub loaders_find_files { # Doesn't really find files...hurm...
+sub _find_files { # Doesn't really find files...hurm...
     my $self = shift;
 
     if ( $self->path_is_file ) {
-        my $path = $self->loaders_env_lookup('CONFIG') unless $self->no_env;
+        my $path = $self->_env_lookup('CONFIG') unless $self->no_env;
         $path ||= $self->path;
         return (grep -r, $path);
     }
     else {
-        my ($path, $extension) = $self->loaders_get_path;
-        my $local_suffix = $self->loaders_get_local_suffix;
+        my ($path, $extension) = $self->_get_path;
+        my $local_suffix = $self->_get_local_suffix;
         my @extensions = @{ Config::Any->extensions };
         my $no_local = $self->no_local;
 
@@ -231,46 +215,40 @@ sub loaders_find_files { # Doesn't really find files...hurm...
     }
 }
 
-sub loaders_get_local_suffix {
+sub _get_local_suffix {
     my $self = shift;
 
     my $name = $self->name;
     my $suffix;
-    $suffix = $self->loaders_env_lookup('CONFIG_LOCAL_SUFFIX') unless
+    $suffix = $self->_env_lookup('CONFIG_LOCAL_SUFFIX') unless
         $self->no_env;
-    $suffix ||= $self->local_suffix || "local";
+    $suffix ||= $self->local_suffix;
 
     return $suffix;
 }
-sub loaders_env_lookup {
+sub _env_lookup {
     my $self = shift;
     my @suffix = @_;
 
-    my $name = $self->name;
-    my $env_lookup = $self->env_lookup || [];
-    my @lookup;
-    push @lookup, $name if $name;
-    push @lookup, @$env_lookup;
-
-    for my $prefix (@lookup) {
-        my $value = loaders_env($prefix, @suffix);
+    for my $prefix ( grep defined, ($self->name,$self->env_lookups)) {
+        my $value = _env($prefix, @suffix);
         return $value if defined $value;
     }
 
     return;
 }
-sub loaders_env (@) {
+sub _env (@) {
     my $key = uc join "_", @_;
     $key =~ s/::/_/g;
     $key =~ s/\W/_/g;
     return $ENV{$key};
 }
-sub loaders_get_path {
+sub _get_path {
     my $self = shift;
 
     my $name = $self->name;
     my $path;
-    $path = $self->loaders_env_lookup('CONFIG') unless $self->no_env;
+    $path = $self->_env_lookup('CONFIG') unless $self->no_env;
     $path ||= $self->path;
 
     my $extension = file_extension( $path );
@@ -288,7 +266,6 @@ sub file_extension ($) {
     my ($extension) = $path =~ m{\.([^/\.]{1,4})$};
     return $extension;
 }
-
 
 1;
 
