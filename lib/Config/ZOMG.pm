@@ -5,6 +5,7 @@ package Config::ZOMG;
 use Moo;
 use Sub::Quote 'quote_sub';
 
+## Need this while im hacking, shouldn't hurt anyone
 use lib '../Config-Loader/lib';
 use Config::Loader;
 
@@ -35,6 +36,27 @@ has path_to => (
                    !$_[0]->path_is_file && $_[0]->path ||
                     "."
                 },
+);
+
+has source => (
+    is => 'lazy',
+    clearer => 1,
+    predicate => 1,
+    builder => sub {
+
+        my $self = shift;
+
+        my @sources = map {
+            [ File => { file => $_ } ],
+        } $self->_find_files;
+
+        return Config::Loader->new_source
+            ( "Merged",
+              default => $self->default,
+              sources=>\@sources
+          );
+
+      },
 );
 
 ## Moo attributes from the original ::Loader
@@ -86,27 +108,6 @@ has _config => (
    is => 'rw',
 );
 
-has source => (
-    is => 'lazy',
-    clearer => 1,
-    predicate => 1,
-    builder => sub {
-
-        my $self = shift;
-
-        my @sources = map {
-            [ File => { file => $_ } ],
-        } $self->_find_files;
-
-        return Config::Loader->new_source
-            ( "Merged",
-              default => $self->default,
-              sources=>\@sources
-          );
-
-      },
-);
-
 sub BUILD {
     my $self = shift;
     my $given = shift;
@@ -123,6 +124,8 @@ sub BUILD {
     }
 
 }
+
+### Functions from API ###
 
 sub clone {
     require Clone;
@@ -167,6 +170,7 @@ sub load {
     return $self->_config;
 }
 
+## Functions for internal use
 sub _find_files { # Doesn't really find files...hurm...
     my $self = shift;
 
@@ -214,7 +218,6 @@ sub _find_files { # Doesn't really find files...hurm...
         return @final_files;
     }
 }
-
 sub _get_local_suffix {
     my $self = shift;
 
