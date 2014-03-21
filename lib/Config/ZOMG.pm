@@ -159,7 +159,7 @@ sub found {
 ## Any files that would be found
 sub find {
     my $self = shift;
-    return grep { -f $_ } $self->_find_files;
+    return grep -f, $self->_find_files;
 }
 
 sub load {
