@@ -5,7 +5,7 @@ package Config::ZOMG;
 use Moo;
 use Sub::Quote 'quote_sub';
 
-## Need this while im hacking, shouldn't hurt anyone
+## Makes hacking easier, shouldn't hurt anyone
 use lib '../Config-Loader/lib';
 use Config::Loader;
 
@@ -45,14 +45,14 @@ has source => (
 
         my $self = shift;
 
-        my @sources = map {
-            [ File => { file => $_ } ],
-        } $self->_find_files;
+        # my @sources = map {
+        #     [ File => { file => $_ } ],
+        # } $self->_find_files;
 
         return Config::Loader->new_source
-            ( "Merged",
+            ( "Files",
               default => $self->default,
-              sources=>\@sources
+              files => [ $self->_find_files ],
           );
 
       },
