@@ -53,6 +53,10 @@ has source => (
             ( "Files",
               default => $self->default,
               files => [ $self->_find_files ],
+              load_args => {
+                  use_ext => 1,
+                  driver_args => $self->driver,
+              }
           );
 
       },
