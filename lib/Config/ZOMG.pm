@@ -7,7 +7,7 @@ use Sub::Quote 'quote_sub';
 
 ## Makes hacking easier, shouldn't hurt anyone
 use lib '../Config-Loader/lib';
-use Config::Loader;
+use Config::Loader '+Config::ZOMG::CLSource';
 
 use Config::Any;
 
@@ -45,12 +45,8 @@ has source => (
 
         my $self = shift;
 
-        # my @sources = map {
-        #     [ File => { file => $_ } ],
-        # } $self->_find_files;
-
         return Config::Loader->new_source
-            ( "Files",
+            ( "+Config::ZOMG::CLSource",
               default => $self->default,
               files => [ $self->_find_files ],
               load_args => {
