@@ -6,7 +6,6 @@ use Moo;
 use Sub::Quote 'quote_sub';
 
 ## Makes hacking easier, shouldn't hurt anyone
-use lib '../Config-Loader/lib';
 use Config::Loader '+Config::ZOMG::CLSource';
 
 use Config::Any;
