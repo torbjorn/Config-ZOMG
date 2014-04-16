@@ -170,7 +170,9 @@ around BUILDARGS => sub {
 
 };
 
-## Needed for _find_files
+## Needed for _find_files, note these files are currently only used
+## to satisfy ::ZOMG->find , they are not used as input for reading config,
+## this will change in future.
 sub file_extension ($) {
     my $path = shift;
     return if -d $path;
