@@ -1,20 +1,14 @@
 package Config::ZOMG;
-# b7b248b003c522fe026ac64387de8ae3a8a68de0
+
 # ABSTRACT: Yet Another Catalyst::Plugin::ConfigLoader-style layer over Config::Any
 
 use Moo;
 use Sub::Quote 'quote_sub';
 
-## Makes hacking easier, shouldn't hurt anyone
-# use Config::Loader '+Config::ZOMG::CLSource';
 use Config::ZOMG::CLSource;
 use Config::Any;
 
 use MooX::HandlesVia;
-
-# has package => (
-#    is => 'ro',
-# );
 
 has load_once => (
    is => 'ro',
@@ -53,7 +47,6 @@ has _config => (
 );
 
 ### Functions from API ###
-
 sub clone {
     require Clone;
     Clone::clone($_[0]->config);
@@ -88,6 +81,8 @@ sub found {
 
 ## Any files that would be found
 sub find {
+    warn "Currently not supported";
+    return;
     my $self = shift;
     return grep -f, $self->_find_files;
 }
