@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use Test::More;
+use Test::More skip_all => "module no longer checks extensions";
 
 use Config::ZOMG;
 
