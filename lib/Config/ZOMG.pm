@@ -5,6 +5,7 @@ package Config::ZOMG;
 use Moo;
 use Sub::Quote 'quote_sub';
 
+use Carp;
 use Config::ZOMG::CLSource;
 use Config::Any;
 
@@ -64,7 +65,7 @@ sub open {
         return $class->new( @_ == 1 ? (file => $_[0]) : @_ )->open;
     }
     my $self = shift;
-    warn "You called ->open on an instantiated object with arguments" if @_;
+    carp "You called ->open on an instantiated object with arguments" if @_;
     my $config_hash = $self->load;
     return unless $self->found;
     return wantarray ? ($config_hash, $self) : $config_hash;
@@ -81,7 +82,7 @@ sub found {
 
 ## Any files that would be found
 sub find {
-    warn "Currently not supported";
+    carp "Currently not supported";
     return;
     my $self = shift;
     return grep -f, $self->_find_files;
