@@ -15,9 +15,6 @@ sub has_Config_General {
         file => "t/assets/some_random_file.pl"
     );
 
-    # $config->source->source_objects;
-    # Dwarn $config->source->sources;
-
     ok($config->load);
     is($config->load->{'Controller::Foo'}->{foo},       'bar');
     is($config->load->{'Model::Baz'}->{qux},            'xyzzy');
