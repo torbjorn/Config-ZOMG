@@ -118,6 +118,11 @@ sub BUILD {
 
     $self->{source_builder} = $source_builder;
 
+    ## This builder allows the source to be cleared and rebuilt later,
+    ## it needs this to support ->reload. C::L sources do not easily
+    ## clear their sources. Recreating seems the best option.  The
+    ## MooX::ObjectBuilder that tobyink released now can take care of
+    ## this without needing an extra attribute to hold the sub.
 }
 
 1;
