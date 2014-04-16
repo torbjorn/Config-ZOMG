@@ -142,9 +142,9 @@ around BUILDARGS => sub {
     my $args = $orig->($self,@_);
 
     if ( delete $args->{sources} ) {
-        carp "Providing sources through constructor is not supported. Any values passed will be discarded."
+        carp "Providing sources through constructor is not supported. Any values passed will be discarded.";
     }
-    ;
+
 
     if ($args->{file}) {
 
@@ -152,7 +152,7 @@ around BUILDARGS => sub {
         $args->{path} = delete $args->{file};
 
         if ( exists $args->{local_suffix} ) {
-            warn "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead"
+            warn "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead";
         }
 
     }
