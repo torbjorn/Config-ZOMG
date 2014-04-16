@@ -11,6 +11,10 @@ use Config::Any;
 
 use MooX::HandlesVia;
 
+has package => (
+   is => 'ro',
+);
+
 has load_once => (
    is => 'ro',
    default => quote_sub q{ 1 },
@@ -82,14 +86,16 @@ sub found {
 
 ## Any files that would be found
 sub find {
-    carp "Currently not supported";
-    return;
     my $self = shift;
-    return grep -f, $self->_find_files;
+    my $clear_it_after = not $self->has_source;
+    my @files = grep -f, $self->source->_find_files;
+    $self->clear_source if $clear_it_after;
+    return @files;
 }
 
 sub load {
     my $self = shift;
+    use Devel::Dwarn;
     return $self->_config if $self->load_once and $self->has_source;
     $self->_config( $self->load_config );
     return $self->_config;
