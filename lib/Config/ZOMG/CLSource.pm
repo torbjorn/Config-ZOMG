@@ -49,7 +49,6 @@ has env_lookup => (
 );
 has '+sources' => (
     lazy => 1,
-    required => 0,
     builder => \&_build_sources,
 );
 
@@ -171,4 +170,60 @@ around BUILDARGS => sub {
 
 };
 
+## Needed for _find_files
+sub file_extension ($) {
+    my $path = shift;
+    return if -d $path;
+    my ($extension) = $path =~ m{\.([^/\.]{1,4})$};
+    return $extension;
+}
+sub _find_files { # Doesn't really find files...hurm...
+    my $self = shift;
+
+    if ($self->path_is_file) {
+        my $path = $self->_env_lookup('CONFIG') unless $self->no_env;
+        $path ||= $self->path;
+        return ($path);
+    }
+    else {
+        my ($path, $extension) = $self->_get_path;
+        my $local_suffix = $self->_get_local_suffix;
+        my @extensions = $self->_get_extensions;
+        my $no_local = $self->no_local;
+
+        my @files;
+        if ($extension) {
+            die "Can't handle file extension $extension" unless first { $_ eq $extension } @extensions;
+            push @files, $path;
+            unless ($no_local) {
+                (my $local_path = $path) =~ s{\.$extension$}{_$local_suffix.$extension};
+                push @files, $local_path;
+            }
+        }
+        else {
+            push @files, map { "$path.$_" } @extensions;
+            push @files, map { "${path}_${local_suffix}.$_" } @extensions unless $no_local;
+        }
+
+        return @files;
+    }
+}
+sub _get_extensions { @{ Config::Any->extensions } }
+sub _get_path {
+    my $self = shift;
+
+    my $name = $self->name;
+    my $path;
+    $path = $self->_env_lookup('CONFIG') unless $self->no_env;
+    $path ||= $self->path;
+
+    my $extension = file_extension $path;
+
+    if (-d $path) {
+        $path =~ s{[\/\\]$}{}; # Remove any trailing slash, e.g. apple/ or apple\ => apple
+        $path .= "/$name"; # Look for a file in path with $self->name, e.g. apple => apple/name
+    }
+
+    return ($path, $extension);
+}
 1;
