@@ -7,6 +7,8 @@ plan skip_all => "Config::General is required for this test" unless eval "requir
 
 use Config::ZOMG;
 
+$ENV{CONFIG_LOADER_SOURCE_FILE_MANY_FILES_ALLOW} = 1;
+
 my $config = Config::ZOMG->new(qw{ name xyzzy path t/assets/order });
 
 ok($config->load);

@@ -4,7 +4,7 @@ use warnings;
 use Test::More;
 use Test::Deep;
 use Test::Warn;
-
+use Devel::Dwarn;
 use Config::ZOMG;
 
 sub has_Config_General {
@@ -15,6 +15,9 @@ sub has_Config_General {
     my $config = Config::ZOMG->new(
         file => "t/assets/some_random_file.pl"
     );
+
+    # $config->source->source_objects;
+    # Dwarn $config->source->sources;
 
     ok($config->load);
     is($config->load->{'Controller::Foo'}->{foo},       'bar');

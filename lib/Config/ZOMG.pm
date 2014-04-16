@@ -1,29 +1,24 @@
 package Config::ZOMG;
-
+# b7b248b003c522fe026ac64387de8ae3a8a68de0
 # ABSTRACT: Yet Another Catalyst::Plugin::ConfigLoader-style layer over Config::Any
 
 use Moo;
 use Sub::Quote 'quote_sub';
 
 ## Makes hacking easier, shouldn't hurt anyone
-use Config::Loader '+Config::ZOMG::CLSource';
-
+# use Config::Loader '+Config::ZOMG::CLSource';
+use Config::ZOMG::CLSource;
 use Config::Any;
 
 use MooX::HandlesVia;
 
-has package => (
-   is => 'ro',
-);
+# has package => (
+#    is => 'ro',
+# );
 
 has load_once => (
    is => 'ro',
    default => quote_sub q{ 1 },
-);
-
-has default => (
-   is => 'ro',
-   default => quote_sub q[ {} ],
 );
 
 has path_to => (
@@ -31,97 +26,31 @@ has path_to => (
    reader => '_path_to',
    lazy => 1,
    builder => sub { $_[0]->load->{home} ||
-                   !$_[0]->path_is_file && $_[0]->path ||
+                   !$_[0]->source->path_is_file && $_[0]->source->path ||
                     "."
                 },
 );
 
 has source => (
-    is => 'lazy',
+    is => 'ro',
     clearer => 1,
     predicate => 1,
-    builder => sub {
-
-        my $self = shift;
-
-        return Config::Loader->new_source
-            ( "+Config::ZOMG::CLSource",
-              default => $self->default,
-              files => [ $self->_find_files ],
-              load_args => {
-                  use_ext => 1,
-                  driver_args => $self->driver,
-              }
-          );
-
-      },
+    lazy => 1,
+    handles => [qw/default load_config/],
+    builder => sub { $_[0]->source_builder->() },
 );
 
-## Moo attributes from the original ::Loader
-
-has name => (
-   is => 'rw',
-);
-
-has path => (
-   is => 'ro',
-   default => quote_sub q{ '.' },
+has source_builder => (
+    is => 'ro'
 );
 
 has driver => (
    is => 'ro',
    default => quote_sub q[ {} ],
 );
-
-has local_suffix => (
-   is => 'ro',
-   default => quote_sub q{ 'local' },
-);
-
-has no_env => (
-   is => 'ro',
-   default => quote_sub q{ 0 },
-);
-
-has no_local => (
-   is => 'ro',
-   default => quote_sub q{ 0 },
-);
-
-has env_lookup => (
-   is => 'ro',
-   ## puts it in an array ref if receives a scalar
-   coerce => sub { ref $_[0] eq "ARRAY" && $_[0] || [$_[0]] },
-   handles_via => "Array",
-   handles => { "env_lookups" => "elements" },
-   default => quote_sub q{ [] },
-);
-
-has path_is_file => (
-   is => 'ro',
-   default => quote_sub q{ 0 },
-);
-
 has _config => (
    is => 'rw',
 );
-
-sub BUILD {
-    my $self = shift;
-    my $given = shift;
-
-    if ($given->{file}) {
-
-        $self->{path_is_file} = 1;
-        $self->{path} = $given->{file};
-
-        if ( exists $given->{local_suffix} ) {
-            warn "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead"
-        }
-
-    }
-
-}
 
 ### Functions from API ###
 
@@ -152,7 +81,9 @@ sub open {
 sub found {
     my $self = shift;
     return unless $self->has_source;
-    return ( map { $_->[1]{file} } @{ $self->source->sources } );
+    return ( map { @{$_->files_loaded} }
+             grep { $_->can("files_loaded") }
+             @{ $self->source->source_objects } );
 }
 
 ## Any files that would be found
@@ -163,109 +94,29 @@ sub find {
 
 sub load {
     my $self = shift;
-    return $self->_config if $self->has_source && $self->load_once;
-    $self->_config( $self->source->load_config );
+    return $self->_config if $self->load_once and $self->has_source;
+    $self->_config( $self->load_config );
     return $self->_config;
 }
 
 ## Functions for internal use
-sub _find_files { # Doesn't really find files...hurm...
-    my $self = shift;
 
-    if ( $self->path_is_file ) {
-        my $path = $self->_env_lookup('CONFIG') unless $self->no_env;
-        $path ||= $self->path;
-        return (grep -r, $path);
-    }
-    else {
-        my ($path, $extension) = $self->_get_path;
-        my $local_suffix = $self->_get_local_suffix;
-        my @extensions = @{ Config::Any->extensions };
-        my $no_local = $self->no_local;
+sub BUILD {
 
-        my @files;
-        if ($extension) {
-            die "Can't handle file extension $extension" unless grep { $_ eq $extension } @extensions;
-            push @files, $path;
-            unless ($no_local) {
-                (my $local_path = $path) =~ s{\.$extension$}{_$local_suffix.$extension};
-                push @files, $local_path;
-            }
-        }
-        else {
-            push @files, map { "$path.$_" } @extensions;
-            push @files, map { "${path}_${local_suffix}.$_" } @extensions unless $no_local;
-        }
+    my ($self,$args) = (shift,shift);
 
-        my (@cfg, @local_cfg);
-        for (sort @files) {
+    my $source_builder = sub {
 
-            if (m{$local_suffix\.}ms) {
-                push @local_cfg, $_;
-            } else {
-                push @cfg, $_;
-            }
+        my @params = qw/name path file path_is_file local_suffix
+                        no_env no_local env_lookup default/;
+        my %source_args = map { $_, $args->{$_} } grep exists $args->{$_}, @params;
 
-        }
+        return Config::ZOMG::CLSource->new(%source_args);
 
-        my @final_files = $no_local ?
-            @cfg : (@cfg, @local_cfg);
+    };
 
-        @final_files = grep -r, @final_files;
+    $self->{source_builder} = $source_builder;
 
-        return @final_files;
-    }
-}
-sub _get_local_suffix {
-    my $self = shift;
-
-    my $name = $self->name;
-    my $suffix;
-    $suffix = $self->_env_lookup('CONFIG_LOCAL_SUFFIX') unless
-        $self->no_env;
-    $suffix ||= $self->local_suffix;
-
-    return $suffix;
-}
-sub _env_lookup {
-    my $self = shift;
-    my @suffix = @_;
-
-    for my $prefix ( grep defined, ($self->name,$self->env_lookups)) {
-        my $value = _env($prefix, @suffix);
-        return $value if defined $value;
-    }
-
-    return;
-}
-sub _env (@) {
-    my $key = uc join "_", @_;
-    $key =~ s/::/_/g;
-    $key =~ s/\W/_/g;
-    return $ENV{$key};
-}
-sub _get_path {
-    my $self = shift;
-
-    my $name = $self->name;
-    my $path;
-    $path = $self->_env_lookup('CONFIG') unless $self->no_env;
-    $path ||= $self->path;
-
-    my $extension = file_extension( $path );
-
-    if (-d $path) {
-        $path =~ s{[\/\\]$}{}; # Remove any trailing slash, e.g. apple/ or apple\ => apple
-        $path .= "/$name"; # Look for a file in path with $self->name, e.g. apple => apple/name
-    }
-
-    return ($path, $extension);
-}
-sub file_extension ($) {
-    my $path = shift;
-    return if -d $path;
-    my ($extension) = $path =~ m{\.([^/\.]{1,4})$};
-    return $extension;
 }
 
 1;
