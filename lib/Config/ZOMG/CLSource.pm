@@ -152,7 +152,7 @@ around BUILDARGS => sub {
         $args->{path} = delete $args->{file};
 
         if ( exists $args->{local_suffix} ) {
-            warn "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead";
+            carp "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead";
         }
 
     }
