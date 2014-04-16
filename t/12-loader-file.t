@@ -4,7 +4,6 @@ use warnings;
 use Test::More;
 use Test::Deep;
 use Test::Warn;
-use Devel::Dwarn;
 use Config::ZOMG;
 
 sub has_Config_General {

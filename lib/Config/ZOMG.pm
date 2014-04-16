@@ -95,7 +95,6 @@ sub find {
 
 sub load {
     my $self = shift;
-    use Devel::Dwarn;
     return $self->_config if $self->load_once and $self->has_source;
     $self->_config( $self->load_config );
     return $self->_config;
