@@ -79,9 +79,7 @@ sub open {
 sub found {
     my $self = shift;
     return unless $self->has_source;
-    return ( map { @{$_->files_loaded} }
-             grep { $_->can("files_loaded") }
-             @{ $self->source->source_objects } );
+    return @{ $self->source->files_loaded };
 }
 
 ## Any files that would be found
