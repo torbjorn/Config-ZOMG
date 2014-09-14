@@ -10,6 +10,8 @@ use Sub::Quote 'quote_sub';
 
 use Carp;
 
+use Config::Loader ();
+
 extends "Config::Loader::Source::Merged";
 
 has default => (
@@ -29,109 +31,129 @@ has path_is_file => (
 );
 has local_suffix => (
    is => 'ro',
-   default => quote_sub q{ 'local' },
-);
-has no_env => (
-   is => 'ro',
-   default => quote_sub q{ 0 },
 );
 has no_local => (
    is => 'ro',
    default => quote_sub q{ 0 },
 );
-has env_lookup => (
-   is => 'ro',
-   ## puts it in an array ref if receives a scalar
-   coerce => sub { ref $_[0] eq "ARRAY" && $_[0] || [$_[0]] },
-   handles_via => "Array",
-   handles => { "env_lookups" => "elements" },
-   default => quote_sub q{ [] },
-);
 has '+sources' => (
     lazy => 1,
     builder => \&_build_sources,
 );
+## place holders for lazy construction
+has no_env => (
+   is => 'ro',
+);
+has env_lookup => (
+   is => 'ro',
+);
+has file => (
+    is => 'ro',
+);
 
-sub _env_lookup {
-    my $self = shift;
-    my @suffix = @_;
-
-    for my $prefix ( grep defined, ($self->name,$self->env_lookups)) {
-        my $value = _env($prefix, @suffix);
-        return $value if defined $value;
+has env_source => (
+    is => 'lazy',
+    handles => {
+        env_path   => 'path',
+        env_suffix => 'suffix',
+    },
+    builder => sub {
+        my $self = shift;
+        Config::Loader->new_source( 'FileFromEnv', {
+            name       => $self->name,
+            no_env     => $self->no_env,
+            env_lookup => $self->env_lookup,
+        });
     }
+);
 
-    return;
-}
-sub _env (@) {
-    my $key = uc join "_", @_;
-    $key =~ s/::/_/g;
-    $key =~ s/\W/_/g;
-    return $ENV{$key};
-}
-sub _local_suffixed_filepath {
+# has env_lookup => qw/is ro handles/,
+#     [qw/no_env env_lookup/, { env_path => 'path', env_suffix => 'suffix' }];
 
-    my ($file,$local_suffix) = (shift,shift);
+# sub _env_lookup {
+#     my $self = shift;
+#     my @suffix = @_;
 
-    die "local_suffix must be provided" unless defined $local_suffix;
+#     for my $prefix ( grep defined, ($self->name,$self->env_lookups)) {
+#         my $value = _env($prefix, @suffix);
+#         return $value if defined $value;
+#     }
 
-    ## This assumes $file is a file or a stem. Cases where it
-    ## is a directory needs to be explored later
-    my( $name, $dirs, $suffix ) = fileparse( $file, qr/\.[^.]*/ );
+#     return;
+# }
+# sub _env (@) {
+#     my $key = uc join "_", @_;
+#     $key =~ s/::/_/g;
+#     $key =~ s/\W/_/g;
+#     return $ENV{$key};
+# }
+# sub _local_suffixed_filepath {
 
-    my $new_with_local = $name . "_" . $local_suffix;
+#     my ($file,$local_suffix) = (shift,shift);
 
-    my $new_local_file = catfile( $dirs, $new_with_local );
+#     die "local_suffix must be provided" unless defined $local_suffix;
 
-    $new_local_file .= $suffix ? $suffix : "";
+#     ## This assumes $file is a file or a stem. Cases where it
+#     ## is a directory needs to be explored later
+#     my( $name, $dirs, $suffix ) = fileparse( $file, qr/\.[^.]*/ );
 
-    return $new_local_file;
+#     my $new_with_local = $name . "_" . $local_suffix;
 
-}
-sub _get_local_suffix {
-    my $self = shift;
-    my $name = $self->name;
-    my $suffix;
-    $suffix = $self->_env_lookup('CONFIG_LOCAL_SUFFIX') unless
-        $self->no_env;
-    $suffix ||= $self->local_suffix;
+#     my $new_local_file = catfile( $dirs, $new_with_local );
 
-    return $suffix;
-}
+#     $new_local_file .= $suffix ? $suffix : "";
+
+#     return $new_local_file;
+
+# }
+# sub _get_local_suffix {
+#     my $self = shift;
+#     my $name = $self->name;
+#     my $suffix;
+#     $suffix = $self->_env_lookup('CONFIG_LOCAL_SUFFIX') unless
+#         $self->no_env;
+#     $suffix ||= $self->local_suffix;
+
+#     return $suffix;
+# }
 
 sub _build_sources {
 
     my $self = shift;
 
-    my $path = $self->_env_lookup('CONFIG') unless $self->no_env;
-    $path ||= $self->path;
+    my $path = $self->env_path || $self->path;
+    my $path_is_file = $self->path_is_file;
+    my $no_local = $self->no_local;
 
-    my @sources;
+    if ($self->file) {
 
-    if ( $self->path_is_file ) {
-        return [] unless -r $path;
-        @sources = ( [File => { file => $path }] );
-    }
-    else {
-
-        if (-d $path) {
-            $path = catfile( $path, $self->name );
-        }
-        @sources = ( [File => { file => $path }] );
-
-        if ( not $self->no_local ) {
-
-            my $local_suffix = $self->_get_local_suffix;
-            push @sources, [
-                File => { file => _local_suffixed_filepath($path,$local_suffix) }
-            ];
-
-        }
+        $path_is_file = 1;
+        $path = $self->file;
+        $no_local = 1;
 
     }
 
-    return \@sources;
+    return [] if $path_is_file and not -r $path;
 
+    if (-d $path) {
+        $path = catfile( $path, $self->name );
+    }
+
+    return [[ 'FileWithLocal' => {
+        file => $path,
+        no_local => $no_local,
+        defined $self->local_suffix ? (local_suffix => $self->local_suffix) : (),
+    }]];
+
+}
+
+sub files_loaded {
+    my $self = shift;
+    return ([
+        map { @{$_->files_loaded} }
+            grep { $_->can("files_loaded") }
+                @{ $self->source_objects }
+            ]);
 }
 
 around BUILDARGS => sub {
@@ -140,20 +162,20 @@ around BUILDARGS => sub {
 
     my $args = $orig->($self,@_);
 
-    if ( delete $args->{sources} ) {
+    # my @env_args = delete @{$args->{qw/no_env env_lookup/}};
+    # $args->{env_source} = Config::Loader->new_source( 'FileFromEnv', {
+    #     name       => $args->{name},
+    #     no_env     => $env_args[0],
+    #     env_lookup => $env_args[1],
+    # });
+
+    if ( exists $args->{sources} ) {
+        delete $args->{sources};
         carp "Providing sources through constructor is not supported. Any values passed will be discarded.";
     }
 
-
-    if ($args->{file}) {
-
-        $args->{path_is_file} = 1;
-        $args->{path} = delete $args->{file};
-
-        if ( exists $args->{local_suffix} ) {
-            carp "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead";
-        }
-
+    if ( exists $args->{file} and exists $args->{local_suffix} ) {
+        carp "Warning, 'local_suffix' will be ignored if 'file' is given, use 'path' instead";
     }
 
     if ( defined( my $name = $args->{name} )) {
@@ -173,6 +195,7 @@ around BUILDARGS => sub {
 ## Needed for _find_files, note these files are currently only used
 ## to satisfy ::ZOMG->find , they are not used as input for reading config,
 ## this will change in future.
+
 sub file_extension ($) {
     my $path = shift;
     return if -d $path;
@@ -183,13 +206,13 @@ sub _find_files { # Doesn't really find files...hurm...
     my $self = shift;
 
     if ($self->path_is_file) {
-        my $path = $self->_env_lookup('CONFIG') unless $self->no_env;
+        my $path = $self->env_path;
         $path ||= $self->path;
         return ($path);
     }
     else {
         my ($path, $extension) = $self->_get_path;
-        my $local_suffix = $self->_get_local_suffix;
+        my $local_suffix = $self->env_suffix || $self->local_suffix || 'local';
         my @extensions = $self->_get_extensions;
         my $no_local = $self->no_local;
 
@@ -216,7 +239,7 @@ sub _get_path {
 
     my $name = $self->name;
     my $path;
-    $path = $self->_env_lookup('CONFIG') unless $self->no_env;
+    $path = $self->env_path;
     $path ||= $self->path;
 
     my $extension = file_extension $path;
