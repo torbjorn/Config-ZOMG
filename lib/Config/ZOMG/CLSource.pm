@@ -31,17 +31,36 @@ has '+sources' => (
 );
 has env_source => (
     is => 'lazy',
-    handles => {
-        env_path   => 'path',
-        env_suffix => 'suffix',
-    },
     builder => sub {
         my $self = shift;
-        Config::Loader->new_source( 'FileFromEnv', {
-            name       => $self->source_args->{name},
-            no_env     => $self->source_args->{no_env},
-            env_lookup => $self->source_args->{env_lookup},
-        });
+
+        return {} if $self->source_args->{no_env};
+
+        ## arrayify env_lookup
+        my @env_search = ref $self->source_args->{env_lookup} eq "ARRAY"
+            && $self->source_args->{env_lookup}
+                || [$self->source_args->{env_lookup}];
+
+        my ($prefix) = grep defined, $self->source_args->{name},
+            @env_search;
+
+        ## fetch path and suffix and set up a hashref with those
+        my $c = Config::Loader->new_source( 'ENV', {
+            env_prefix => $prefix,
+            env_search => [qw/config config_local_suffix/],
+        })->load_config;
+
+        my ($env_path,$env_suffix) = @{$c}{
+            (
+                $prefix . "_config",
+                $prefix . "_config_local_suffix",
+            )};
+
+        return {
+            path => $env_path,
+            suffix => $env_suffix,
+        };
+
     }
 );
 has source_args => (
@@ -53,7 +72,7 @@ sub _build_sources {
 
     my $self = shift;
 
-    my $path = $self->env_path || $self->path;
+    my $path = $self->env_source->{path} || $self->path;
     my $path_is_file = $self->path_is_file;
     my $no_local = $self->source_args->{no_local};
 
@@ -137,13 +156,13 @@ sub _find_files { # Doesn't really find files...hurm...
     my $self = shift;
 
     if ($self->path_is_file) {
-        my $path = $self->env_path;
+        my $path = $self->env_source->{path};
         $path ||= $self->path;
         return ($path);
     }
     else {
         my ($path, $extension) = $self->_get_path;
-        my $local_suffix = $self->env_suffix || $self->source_args->{local_suffix} || 'local';
+        my $local_suffix = $self->env_source->{suffix} || $self->source_args->{local_suffix} || 'local';
         my @extensions = $self->_get_extensions;
         my $no_local = $self->source_args->{no_local};
 
@@ -169,7 +188,7 @@ sub _get_path {
 
     my $name = $self->source_args->{name};
     my $path;
-    $path = $self->env_path;
+    $path = $self->env_source->{path};
     $path ||= $self->path;
 
     my $extension = file_extension $path;
