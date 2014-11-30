@@ -44,17 +44,15 @@ has env_source => (
         my ($prefix) = grep defined, $self->source_args->{name},
             @env_search;
 
+        $prefix = uc $prefix;
+
         ## fetch path and suffix and set up a hashref with those
         my $c = Config::Loader->new_source( 'ENV', {
             env_prefix => $prefix,
             env_search => [qw/config config_local_suffix/],
         })->load_config;
 
-        my ($env_path,$env_suffix) = @{$c}{
-            (
-                $prefix . "_config",
-                $prefix . "_config_local_suffix",
-            )};
+        my ($env_path,$env_suffix) = @{$c}{ qw/config config_local_suffix/ };
 
         return {
             path => $env_path,
